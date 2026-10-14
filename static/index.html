@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>MAX AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:monospace}
+#hud{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#name{position:absolute;top:24px;left:50%;transform:translateX(-50%);color:#00ffcc;font-size:1.2rem;letter-spacing:0.4em}
+#status{position:absolute;top:52px;left:50%;transform:translateX(-50%);color:#00ffcc88;font-size:0.7rem;letter-spacing:0.2em}
+#subtitle{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);color:#00ffcc;font-size:1rem;text-align:center;max-width:600px;min-height:1.5em;text-shadow:0 0 10px #00ffcc66}
+#emotion{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);color:#00ffcc44;font-size:0.65rem;letter-spacing:0.25em}
+.corner{position:absolute;width:20px;height:20px;opacity:0.5}
+#c1{top:14px;left:14px;border-top:1px solid #00ffcc;border-left:1px solid #00ffcc}
+#c2{top:14px;right:14px;border-top:1px solid #00ffcc;border-right:1px solid #00ffcc}
+#c3{bottom:14px;left:14px;border-bottom:1px solid #00ffcc;border-left:1px solid #00ffcc}
+#c4{bottom:14px;right:14px;border-bottom:1px solid #00ffcc;border-right:1px solid #00ffcc}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="corner" id="c1"></div>
+  <div class="corner" id="c2"></div>
+  <div class="corner" id="c3"></div>
+  <div class="corner" id="c4"></div>
+  <div id="name">M A X</div>
+  <div id="status">ONLINE — WAITING</div>
+  <div id="subtitle">Say "Hey Jarvis" to activate...</div>
+  <div id="emotion">NEUTRAL</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 200);
+cam.position.z = 5;
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+// Head
+const headMat = new THREE.MeshBasicMaterial({color:0x00ffcc, wireframe:true, transparent:true, opacity:0.2});
+const head = new THREE.Mesh(new THREE.SphereGeometry(1,32,32), headMat);
+head.position.y = 0.3;
+scene.add(head);
+
+// Inner solid
+const inner = new THREE.Mesh(
+  new THREE.SphereGeometry(0.96,24,24),
+  new THREE.MeshBasicMaterial({color:0x001a11, transparent:true, opacity:0.6})
+);
+inner.position.y = 0.3;
+scene.add(inner);
+
+// Neck
+const neck = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.22,0.3,0.5,16,1,true),
+  new THREE.MeshBasicMaterial({color:0x00ffcc, wireframe:true, transparent:true, opacity:0.2})
+);
+neck.position.y = -0.85;
+scene.add(neck);
+
+// Shoulders
+const shoulders = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.2,1.0,0.25,32,1,true),
+  new THREE.MeshBasicMaterial({color:0x00ffcc, wireframe:true, transparent:true, opacity:0.15})
+);
+shoulders.position.y = -1.18;
+scene.add(shoulders);
+
+// Eyes
+function makeEye(x) {
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(0.07,8,8),
+    new THREE.MeshBasicMaterial({color:0x00ffcc, transparent:true, opacity:0.9})
+  );
+  m.position.set(x, 0.55, 0.94);
+  return m;
+}
+const eyeL = makeEye(-0.28), eyeR = makeEye(0.28);
+scene.add(eyeL); scene.add(eyeR);
+
+// Rings
+function makeRing(radius, tilt, speed) {
+  const m = new THREE.Mesh(
+    new THREE.TorusGeometry(radius, 0.007, 8, 80),
+    new THREE.MeshBasicMaterial({color:0x00ffcc, transparent:true, opacity:0.3})
+  );
+  m.rotation.x = tilt;
+  m.userData.speed = speed;
+  return m;
+}
+const rings = [
+  makeRing(1.65, Math.PI/2, 0.4),
+  makeRing(1.85, Math.PI/4, -0.25),
+  makeRing(2.05, Math.PI/6, 0.18)
+];
+rings.forEach(r => scene.add(r));
+
+// Scanline
+const scanMat = new THREE.MeshBasicMaterial({color:0x00ffcc, transparent:true, opacity:0.4, side:THREE.DoubleSide});
+const scan = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.01), scanMat);
+scan.position.y = 0.3;
+scene.add(scan);
+
+// Particles
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(400*3);
+for(let i=0;i<400*3;i++) pPos[i]=(Math.random()-0.5)*14;
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos,3));
+const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({color:0x00ffcc, size:0.022, transparent:true, opacity:0.4}));
+scene.add(particles);
+
+const COLORS = {neutral:0x00ffcc, happy:0xffdd00, sad:0x4488ff, angry:0xff4422, curious:0xaa44ff};
+let speaking = false, scanDir = 1, t = 0;
+
+function setColor(hex) {
+  const c = new THREE.Color(hex);
+  [headMat, scanMat, ...rings.map(r=>r.material), particles.material].forEach(m => m.color.set(c));
+  eyeL.material.color.set(c);
+  eyeR.material.color.set(c);
+  const css = '#' + c.getHexString();
+  document.getElementById('subtitle').style.color = css;
+  document.getElementById('name').style.color = css;
+}
+
+// Poll Flask every 600ms
+setInterval(async () => {
+  try {
+    const d = await (await fetch('/status')).json();
+    document.getElementById('subtitle').textContent = d.text || 'Say "Hey Jarvis" to activate...';
+    document.getElementById('status').textContent = d.speaking ? 'SPEAKING' : d.text === 'Listening...' ? 'LISTENING' : d.text === 'Thinking...' ? 'THINKING' : 'ONLINE';
+    document.getElementById('emotion').textContent = (d.emotion || 'neutral').toUpperCase();
+    speaking = d.speaking;
+    setColor(COLORS[d.emotion] || 0x00ffcc);
+  } catch(e) {}
+}, 600);
+
+function animate() {
+  requestAnimationFrame(animate);
+  t += 0.016;
+
+  head.rotation.y = Math.sin(t*0.4)*0.18 + (speaking ? Math.sin(t*7)*0.05 : 0);
+  head.rotation.x = Math.sin(t*0.3)*0.05;
+  inner.rotation.y = head.rotation.y;
+
+  rings.forEach(r => r.rotation.z += r.userData.speed * 0.016 * (speaking ? 2 : 1));
+
+  scan.position.y += scanDir * 0.015 * (speaking ? 2.5 : 1);
+  if(scan.position.y > 1.35) scanDir = -1;
+  if(scan.position.y < -0.75) scanDir = 1;
+  scanMat.opacity = 0.25 + Math.sin(t*4)*0.15;
+
+  const ep = 0.6 + Math.sin(t * (speaking ? 10 : 1.5)) * 0.4;
+  eyeL.material.opacity = eyeR.material.opacity = ep;
+  const es = speaking ? 1.4 : 1.0;
+  eyeL.scale.setScalar(es); eyeR.scale.setScalar(es);
+
+  particles.rotation.y += 0.0006;
+  headMat.opacity = 0.15 + Math.sin(t*1.2)*0.05;
+  renderer.render(scene, cam);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  cam.aspect = innerWidth/innerHeight;
+  cam.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
